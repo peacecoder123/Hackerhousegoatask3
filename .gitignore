@@ -1,0 +1,39 @@
+# ── Python ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Environment variables (NEVER commit secrets) ────────────────────
+.env
+.env.local
+.env*.local
+
+# ── Node / Next.js (frontend/) ─────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+frontend/out/
+
+# ── Hardhat / Contracts ────────────────────────────────────────────
+backend/blockchain/contracts/node_modules/
+backend/blockchain/contracts/artifacts/
+backend/blockchain/contracts/cache/
+
+# ── OS / Editor ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── v0 sandbox internal files ───────────────────────────────────────
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/

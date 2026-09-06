@@ -1,0 +1,20 @@
+require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config({ path: "../../.env" });
+
+/** @type import('hardhat/config').HardhatUserConfig */
+module.exports = {
+  solidity: "0.8.20",
+  networks: {
+    sepolia: {
+      url: process.env.WEB3_PROVIDER_URL || "",
+      accounts: process.env.WALLET_PRIVATE_KEY ? [process.env.WALLET_PRIVATE_KEY] : [],
+    },
+    // Local Hardhat node (for testing without real ETH)
+    localhost: {
+      url: "http://127.0.0.1:8545",
+    },
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
+  },
+};
