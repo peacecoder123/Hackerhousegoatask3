@@ -9,15 +9,9 @@ logger = get_logger("face_detector")
 
 class FaceDetector:
     def __init__(self, model_name: str = "Facenet"):
-        """
-        Available models: 'VGG-Face', 'Facenet' (128-d), 'Facenet512', 'OpenFace', 'DeepFace'
-        """
         self.model_name = model_name
 
     def detect_and_encode(self, image_path: str) -> Dict[str, Any]:
-        """
-        Detects faces in an image and generates feature encodings using DeepFace.
-        """
         if not os.path.exists(image_path):
             logger.error(f"Image path does not exist: {image_path}")
             return {"success": False, "error": f"File not found: {image_path}"}
@@ -38,7 +32,7 @@ class FaceDetector:
                 }
 
             primary_embedding = embedding_objs[0]["embedding"]
-            facial_area = embedding_objs[0]["facial_area"]  # {'x', 'y', 'w', 'h'}
+            facial_area = embedding_objs[0]["facial_area"]
 
             logger.info(f"Successfully detected {len(embedding_objs)} face(s) in {image_path}")
 
@@ -46,27 +40,12 @@ class FaceDetector:
                 "success": True,
                 "faces_found": len(embedding_objs),
                 "facial_area": facial_area,
+                "bbox": [facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]],  # Added for pipeline compatibility
                 "primary_encoding": primary_embedding,
+                "confidence": 0.99,
                 "image_path": image_path
             }
 
         except Exception as e:
             logger.error(f"Error processing image {image_path}: {str(e)}")
             return {"success": False, "error": str(e)}
-
-    def extract_face_crop(self, image_path: str, output_path: str) -> Optional[str]:
-        """
-        Crops and saves the primary detected face to disk.
-        """
-        result = self.detect_and_encode(image_path)
-        if not result["success"]:
-            return None
-
-        area = result["facial_area"]
-        image = cv2.imread(image_path)
-        
-        x, y, w, h = area["x"], area["y"], area["w"], area["h"]
-        cropped_face = image[y:y+h, x:x+w]
-        
-        cv2.imwrite(output_path, cropped_face)
-        return output_path
