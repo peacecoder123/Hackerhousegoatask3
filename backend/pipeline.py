@@ -9,19 +9,21 @@ Runs the full end-to-end pipeline:
   3. Blockchain fingerprint, upload & verification (Member 3)
 
 Usage:
-    python pipeline.py --image path/to/face.jpg [--verify-only <fingerprint>]
+    python pipeline.py --image path/to/face.jpg
+    python pipeline.py --verify-only <64-char-fingerprint>
 """
 
 from __future__ import annotations
 import argparse
 import sys
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
 from utils.logger import get_logger
 from face_detection import encode_face
 from web_search import search_by_image
-from blockchain import compute_fingerprint, upload_to_chain, verify_on_chain
+from blockchain import compute_fingerprint, upload_to_chain, verify_on_chain_full
 
 load_dotenv()
 log = get_logger("pipeline")
@@ -38,8 +40,9 @@ def run_pipeline(image_path: str) -> None:
     log.info("[STEP 1] Detecting and encoding face...")
     face_result = encode_face(image_path)
     log.info(
-        f"  ✓ Face detected — confidence: {face_result['confidence']:.1%}, "
-        f"bbox: {face_result['bbox']}"
+        "  ✓ Face detected — confidence: %.1f%%, bbox: %s",
+        face_result["confidence"] * 100,
+        face_result["bbox"],
     )
 
     # ── Step 2: Web / Social Media Search ─────────────────────────
@@ -52,29 +55,42 @@ def run_pipeline(image_path: str) -> None:
 
     best = matches[0]
     log.info(
-        f"  ✓ Best match: {best['platform']} — '{best['title']}' "
-        f"(score: {best['score']:.1%})"
+        "  ✓ Best match: %s — '%s' (score: %.1f%%)",
+        best["platform"],
+        best["title"],
+        best["score"] * 100,
     )
-    log.info(f"  ✓ URL: {best['url']}")
+    log.info("  ✓ URL: %s", best["url"])
 
     # ── Step 3a: Fingerprint ───────────────────────────────────────
     log.info("[STEP 3a] Computing SHA-256 content fingerprint...")
     fingerprint = compute_fingerprint(image_path, best)
-    log.info(f"  ✓ Fingerprint: {fingerprint[:22]}...{fingerprint[-5:]}")
+    log.info("  ✓ Fingerprint: %s...%s", fingerprint[:22], fingerprint[-5:])
 
     # ── Step 3b: Blockchain Upload ─────────────────────────────────
     log.info("[STEP 3b] Uploading fingerprint to Ethereum Sepolia...")
-    tx_hash = upload_to_chain(fingerprint)
-    log.info(f"  ✓ Transaction submitted: {tx_hash}")
+    upload_result = upload_to_chain(fingerprint)
+
+    if upload_result.get("already_exists"):
+        log.info("  ⚠ Fingerprint already on-chain — skipping new transaction.")
+    else:
+        log.info(
+            "  ✓ Transaction confirmed: %s (block #%s)",
+            upload_result.get("transaction_hash"),
+            upload_result.get("block_number"),
+        )
 
     # ── Step 3c: Verification ──────────────────────────────────────
     log.info("[STEP 3c] Verifying fingerprint on-chain...")
-    is_valid, timestamp = verify_on_chain(fingerprint)
+    verify_result = verify_on_chain_full(fingerprint)
 
-    if is_valid:
-        log.info(f"  ✓ VERIFIED — fingerprint matches on-chain record (timestamp: {timestamp})")
+    if verify_result["verified"]:
+        ts = verify_result["timestamp"]
+        human_ts = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else "unknown"
+        log.info("  ✓ VERIFIED — on-chain since %s", human_ts)
+        log.info("  %s", verify_result["message"])
     else:
-        log.error("  ✗ VERIFICATION FAILED — fingerprint not found on-chain!")
+        log.error("  ✗ VERIFICATION FAILED — %s", verify_result["message"])
         sys.exit(1)
 
     log.info("=" * 60)
@@ -84,24 +100,35 @@ def run_pipeline(image_path: str) -> None:
 
 def run_verify_only(fingerprint: str) -> None:
     """Re-verify an existing fingerprint against the on-chain record."""
-    log.info(f"Re-verifying fingerprint: {fingerprint[:22]}...{fingerprint[-5:]}")
-    is_valid, timestamp = verify_on_chain(fingerprint)
+    log.info("Re-verifying fingerprint: %s...%s", fingerprint[:22], fingerprint[-5:])
+    result = verify_on_chain_full(fingerprint)
 
-    if is_valid:
-        log.info(f"✓ VERIFIED — recorded at timestamp {timestamp}")
+    if result["verified"]:
+        ts = result["timestamp"]
+        human_ts = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else "unknown"
+        log.info("✓ VERIFIED — on-chain since %s", human_ts)
+        log.info("  %s", result["message"])
     else:
-        log.error("✗ MISMATCH — fingerprint not found or content has been tampered with")
+        log.error("✗ MISMATCH — %s", result["message"])
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="FaceChain Verify Pipeline")
+    parser = argparse.ArgumentParser(
+        description="FaceChain Verify Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python pipeline.py --image face.jpg\n"
+            "  python pipeline.py --verify-only <64-char-hex-fingerprint>\n"
+        ),
+    )
     parser.add_argument("--image", type=str, help="Path to the face image to process")
     parser.add_argument(
         "--verify-only",
         type=str,
         metavar="FINGERPRINT",
-        help="Skip detection/search and only verify an existing fingerprint",
+        help="Skip detection/search; only verify an existing fingerprint on-chain",
     )
     args = parser.parse_args()
 
