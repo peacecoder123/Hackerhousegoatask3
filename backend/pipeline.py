@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from utils.logger import get_logger
-from face_detection import encode_face
+from face_detection import FaceDetector
 from web_search import search_by_image
 from blockchain import compute_fingerprint, upload_to_chain, verify_on_chain_full
 
@@ -38,7 +38,7 @@ def run_pipeline(image_path: str) -> None:
 
     # ── Step 1: Face Detection ─────────────────────────────────────
     log.info("[STEP 1] Detecting and encoding face...")
-    face_result = encode_face(image_path)
+    face_result = FaceDetector().detect_and_encode(image_path)
     log.info(
         "  ✓ Face detected — confidence: %.1f%%, bbox: %s",
         face_result["confidence"] * 100,

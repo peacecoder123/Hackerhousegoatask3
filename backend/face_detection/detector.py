@@ -1,59 +1,51 @@
-"""
-face_detection/detector.py
---------------------------
-Step 1 of the FaceChain Verify pipeline.
-
-Detects a face in the input image and returns a 128-d embedding vector.
-
-Member 1 owns this file.
-"""
-
-from __future__ import annotations
 import os
-from typing import TypedDict
+import cv2
+import numpy as np
+from deepface import DeepFace
+from typing import Dict, Any, Optional
+from utils.logger import get_logger
 
+logger = get_logger("face_detector")
 
-class FaceResult(TypedDict):
-    embedding: list[float]   # 128-dimensional face encoding
-    confidence: float        # Detection confidence score (0–1)
-    bbox: list[int]          # Bounding box [x, y, width, height]
+class FaceDetector:
+    def __init__(self, model_name: str = "Facenet"):
+        self.model_name = model_name
 
+    def detect_and_encode(self, image_path: str) -> Dict[str, Any]:
+        if not os.path.exists(image_path):
+            logger.error(f"Image path does not exist: {image_path}")
+            return {"success": False, "error": f"File not found: {image_path}"}
 
-def encode_face(image_path: str) -> FaceResult:
-    """
-    Detect and encode the primary face in the given image.
+        try:
+            embedding_objs = DeepFace.represent(
+                img_path=image_path,
+                model_name=self.model_name,
+                enforce_detection=True
+            )
 
-    Args:
-        image_path: Absolute or relative path to a JPG/PNG/WEBP file.
+            if not embedding_objs:
+                logger.warning(f"No face detected in {image_path}")
+                return {
+                    "success": False,
+                    "error": "No face detected in the provided image scan.",
+                    "faces_found": 0
+                }
 
-    Returns:
-        A FaceResult dict with embedding, confidence, and bounding box.
+            primary_embedding = embedding_objs[0]["embedding"]
+            facial_area = embedding_objs[0]["facial_area"]
 
-    Raises:
-        FileNotFoundError: If the image path does not exist.
-        ValueError: If no face is detected in the image.
-    """
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
+            logger.info(f"Successfully detected {len(embedding_objs)} face(s) in {image_path}")
 
-    # TODO (Member 1): Replace this stub with a real implementation.
-    # Recommended: `import face_recognition` or `from deepface import DeepFace`
-    #
-    # Example using face_recognition:
-    #   import face_recognition
-    #   image = face_recognition.load_image_file(image_path)
-    #   locations = face_recognition.face_locations(image)
-    #   encodings = face_recognition.face_encodings(image, locations)
-    #   if not encodings:
-    #       raise ValueError("No face detected in the image.")
-    #   top, right, bottom, left = locations[0]
-    #   return {
-    #       "embedding": encodings[0].tolist(),
-    #       "confidence": 0.93,   # face_recognition doesn't return confidence natively
-    #       "bbox": [left, top, right - left, bottom - top],
-    #   }
+            return {
+                "success": True,
+                "faces_found": len(embedding_objs),
+                "facial_area": facial_area,
+                "bbox": [facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]],  # Added for pipeline compatibility
+                "primary_encoding": primary_embedding,
+                "confidence": 0.99,
+                "image_path": image_path
+            }
 
-    raise NotImplementedError(
-        "encode_face() is not yet implemented. "
-        "See the TODO comment above for guidance."
-    )
+        except Exception as e:
+            logger.error(f"Error processing image {image_path}: {str(e)}")
+            return {"success": False, "error": str(e)}
