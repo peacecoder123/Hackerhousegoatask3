@@ -39,6 +39,9 @@ def run_pipeline(image_path: str) -> None:
     # ── Step 1: Face Detection ─────────────────────────────────────
     log.info("[STEP 1] Detecting and encoding face...")
     face_result = FaceDetector().detect_and_encode(image_path)
+    if not face_result.get("success"):
+        log.error("  ✗ Face detection failed: %s", face_result.get("error", "unknown error"))
+        sys.exit(1)
     log.info(
         "  ✓ Face detected — confidence: %.1f%%, bbox: %s",
         face_result["confidence"] * 100,
