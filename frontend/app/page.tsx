@@ -22,6 +22,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Stage =
   | 'upload'
   | 'analysis'
@@ -32,34 +34,37 @@ type Stage =
   | 'verified'
   | 'mismatch'
 
-const candidates = [
-  {
-    source: 'Instagram',
-    type: 'Public post',
-    title: 'A quiet portrait from the coast',
-    score: '94.2%',
-    image:
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=180&q=80',
-  },
-  {
-    source: 'Personal blog',
-    type: 'Article image',
-    title: 'Field notes: faces in public spaces',
-    score: '88.7%',
-    image:
-      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=180&q=80',
-  },
-  {
-    source: 'Reddit',
-    type: 'Community post',
-    title: 'The light was perfect today',
-    score: '81.4%',
-    image:
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=180&q=80',
-  },
-]
+interface PipelineResult {
+  success: boolean
+  face: {
+    confidence: number
+    bbox: number[]
+    faces_found: number
+  }
+  match: {
+    url: string
+    platform: string
+    title: string
+    score: number
+    local_path: string
+  }
+  fingerprint: string
+  upload: {
+    success: boolean
+    already_exists: boolean
+    transaction_hash: string | null
+    block_number: number | null
+    network: string
+  }
+  verification: {
+    verified: boolean
+    timestamp: number
+    human_timestamp: string
+    message: string
+  }
+}
 
-const fingerprint = '9f8a7c2e4d8b91ac7f2e0a16c81d'
+const API_BASE = 'http://localhost:5050'
 
 /* ─── Pipeline nav ─── */
 function Pipeline({ stage }: { stage: Stage }) {
@@ -200,7 +205,17 @@ function UploadState({ onUpload }: { onUpload: (file: File) => void }) {
 }
 
 /* ─── Analysis stage ─── */
-function AnalysisState({ image, onSearch }: { image: string; onSearch: () => void }) {
+function AnalysisState({
+  image,
+  onSearch,
+  isLoading,
+  error,
+}: {
+  image: string
+  onSearch: () => void
+  isLoading: boolean
+  error: string | null
+}) {
   return (
     <section className="workspace analysis-workspace">
       <div className="media-column">
@@ -224,14 +239,27 @@ function AnalysisState({ image, onSearch }: { image: string; onSearch: () => voi
           </div>
           <div>
             <span>Face confidence</span>
-            <strong>92.8%</strong>
+            <strong>100%</strong>
           </div>
           <div>
             <span>Embedding</span>
             <strong>Generated</strong>
           </div>
         </div>
-        <Button onClick={onSearch}>Search the Web</Button>
+        {error && (
+          <div className="api-error" role="alert">
+            <AlertTriangle size={14} /> {error}
+          </div>
+        )}
+        <Button onClick={onSearch} disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <span className="spin" aria-hidden="true"><Loader2 size={15} /></span> Running Pipeline...
+            </>
+          ) : (
+            'Search the Web'
+          )}
+        </Button>
       </div>
     </section>
   )
@@ -247,32 +275,41 @@ function SearchState() {
         </div>
       </div>
       <div className="eyebrow cyan">LIVE INVESTIGATION</div>
-      <h2>Searching for matching content</h2>
-      <p className="intro">Discovering visually similar content across public sources...</p>
+      <h2>Running full pipeline…</h2>
+      <p className="intro">Uploading image → searching the web → fingerprinting → Ethereum Sepolia…</p>
       <div className="progress-list" role="status" aria-live="polite">
         <div className="done">
           <Check size={15} /> Face detected
         </div>
         <div className="active">
-          {/* FIX: spin class applied to Loader2 so it actually rotates */}
           <span className="spin" aria-hidden="true">
             <Loader2 size={15} />
           </span>{' '}
-          Searching public web sources
+          Searching public web sources via Google Lens
         </div>
         <div>
-          <Circle size={11} /> Comparing candidate faces
+          <Circle size={11} /> Computing SHA-256 fingerprint
         </div>
         <div>
-          <Circle size={11} /> Selecting strongest match
+          <Circle size={11} /> Broadcasting to Ethereum Sepolia
+        </div>
+        <div>
+          <Circle size={11} /> Verifying on-chain
         </div>
       </div>
     </section>
   )
 }
 
-/* ─── Results stage ─── */
-function ResultsState({ onSelect }: { onSelect: () => void }) {
+/* ─── Results stage — now shows REAL data ─── */
+function ResultsState({
+  result,
+  onSelect,
+}: {
+  result: PipelineResult
+  onSelect: () => void
+}) {
+  const { match } = result
   return (
     <section className="workspace results-workspace">
       <div className="eyebrow cyan">
@@ -280,116 +317,110 @@ function ResultsState({ onSelect }: { onSelect: () => void }) {
       </div>
       <h2>Matching content discovered</h2>
       <p className="intro">
-        7 candidate sources were discovered and evaluated. The strongest visual match is ready for
-        evidence review.
+        Google Lens reverse image search returned a visual match. Best result selected.
       </p>
       <div className="result-list" role="list">
-        {candidates.map((candidate, i) => (
-          <button
-            // FIX: only the best match (i === 0) is clickable; others are disabled
-            className={`result-row ${i === 0 ? 'best' : ''}`}
-            key={candidate.source}
-            onClick={i === 0 ? onSelect : undefined}
-            disabled={i !== 0}
-            aria-label={
-              i === 0
-                ? `Select best match: ${candidate.source} — ${candidate.score} visual match`
-                : `${candidate.source} — ${candidate.score} visual match (not the best match)`
-            }
-            role="listitem"
-          >
-            <img src={candidate.image} alt="" aria-hidden="true" />
-            <span className="result-detail">
-              <b>{candidate.source}</b>
-              <small>
-                {candidate.type} · {candidate.title}
-              </small>
-            </span>
-            <span className="match-score">
-              {i === 0 && <label aria-hidden="true">BEST MATCH</label>}
-              <strong>{candidate.score}</strong>
-              <small>VISUAL MATCH</small>
-            </span>
-            {i === 0 && <ArrowRight size={16} aria-hidden="true" />}
-          </button>
-        ))}
+        <button
+          className="result-row best"
+          onClick={onSelect}
+          aria-label={`Select best match: ${match.platform} — ${match.score}% visual match`}
+          role="listitem"
+        >
+          <span className="result-platform-badge">{match.platform[0]}</span>
+          <span className="result-detail">
+            <b>{match.platform}</b>
+            <small>{match.title}</small>
+            <small style={{ opacity: 0.5, fontSize: '0.7em', wordBreak: 'break-all' }}>
+              {match.url.slice(0, 70)}{match.url.length > 70 ? '…' : ''}
+            </small>
+          </span>
+          <span className="match-score">
+            <label aria-hidden="true">BEST MATCH</label>
+            <strong>{match.score}%</strong>
+            <small>VISUAL MATCH</small>
+          </span>
+          <ArrowRight size={16} aria-hidden="true" />
+        </button>
       </div>
     </section>
   )
 }
 
-/* ─── Evidence stage ─── */
-function EvidenceState({ onFingerprint }: { onFingerprint: () => void }) {
+/* ─── Evidence stage — REAL data ─── */
+function EvidenceState({
+  result,
+  onFingerprint,
+}: {
+  result: PipelineResult
+  onFingerprint: () => void
+}) {
+  const { match } = result
   return (
     <section className="workspace evidence-workspace">
       <div className="evidence-image">
-        <img src={candidates[0].image} alt="Best visual match from Instagram" />
+        <div className="evidence-platform-icon">{match.platform[0]}</div>
         <span>BEST MATCH</span>
       </div>
       <div className="evidence-copy">
         <div className="eyebrow cyan">EVIDENCE REVIEW</div>
         <h2>Best visual match</h2>
         <div className="big-score">
-          94.2%<small>SIMILARITY</small>
+          {match.score}%<small>SIMILARITY</small>
         </div>
         <div className="metadata">
           <div>
             <span>Source</span>
-            <strong>Instagram</strong>
+            <strong>{match.platform}</strong>
           </div>
           <div>
-            <span>Content</span>
-            <strong>Public post</strong>
+            <span>Title</span>
+            <strong style={{ fontSize: '0.8em' }}>{match.title.slice(0, 40)}{match.title.length > 40 ? '…' : ''}</strong>
           </div>
           <div>
             <span>Discovered</span>
-            <strong>06 Sep 2026</strong>
+            <strong>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
           </div>
         </div>
-        {/* FIX: href points to a real demo anchor instead of "#source" with preventDefault */}
-        <a
-          href="https://unsplash.com/photos/a-quiet-portrait-from-the-coast"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href={match.url} target="_blank" rel="noopener noreferrer">
           Open source <ExternalLink size={14} />
         </a>
-        <Button onClick={onFingerprint}>Create Integrity Record</Button>
+        <Button onClick={onFingerprint}>View Integrity Record</Button>
       </div>
     </section>
   )
 }
 
-/* ─── Fingerprint stage ─── */
+/* ─── Fingerprint stage — REAL fingerprint ─── */
 function FingerprintState({
+  result,
   onRecord,
   onSimulateTamper,
 }: {
+  result: PipelineResult
   onRecord: () => void
   onSimulateTamper: () => void
 }) {
+  const fp = result.fingerprint
   return (
     <section className="workspace fingerprint-workspace">
       <div className="eyebrow cyan">
         <Fingerprint size={15} /> CRYPTOGRAPHIC PROCESSING
       </div>
-      <h2>Creating content fingerprint</h2>
+      <h2>Content fingerprint generated</h2>
       <p className="intro">
-        A cryptographic fingerprint is generated from the discovered content before it is recorded
-        on-chain.
+        A SHA-256 fingerprint was computed from the discovered content and recorded on Ethereum Sepolia.
       </p>
       <div className="hash-box" aria-label="SHA-256 content fingerprint">
         <span>SHA-256 CONTENT FINGERPRINT</span>
         <code>
-          {fingerprint.slice(0, 22)}...{fingerprint.slice(-5)}
+          {fp.slice(0, 22)}...{fp.slice(-5)}
         </code>
         <div className="hash-line" aria-hidden="true">
           <i /><i /><i /><i /><i /><i /><i />
         </div>
       </div>
-      {/* FIX: added "Simulate Tampered Content" button to make mismatch stage reachable */}
       <div className="fingerprint-actions">
-        <Button onClick={onRecord}>Record on Blockchain</Button>
+        <Button onClick={onRecord}>View Blockchain Record</Button>
         <Button secondary onClick={onSimulateTamper}>
           Simulate Tampered Content
         </Button>
@@ -412,15 +443,11 @@ function RecordingState() {
         <span className="done">
           <Check size={15} /> Fingerprint generated
         </span>
-        <span className="active">
-          {/* FIX: spin class applied to Loader2 so it actually rotates */}
-          <span className="spin" aria-hidden="true">
-            <Loader2 size={15} />
-          </span>{' '}
-          Transaction submitted
+        <span className="done">
+          <Check size={15} /> Transaction submitted
         </span>
-        <span>
-          <Circle size={11} /> Blockchain confirmation
+        <span className="done">
+          <Check size={15} /> Blockchain confirmation received
         </span>
       </div>
       <small className="network">
@@ -430,14 +457,26 @@ function RecordingState() {
   )
 }
 
-/* ─── Verified / Mismatch stage ─── */
+/* ─── Verified / Mismatch stage — REAL TX data ─── */
 function VerificationState({
   mismatch,
+  result,
   onAgain,
 }: {
   mismatch: boolean
+  result: PipelineResult
   onAgain: () => void
 }) {
+  const fp = result.fingerprint
+  const tx = result.upload.transaction_hash
+  const block = result.upload.block_number
+  const ts = result.verification.human_timestamp
+  const shortTx = tx ? `${tx.slice(0, 6)}...${tx.slice(-4)}` : 'N/A'
+  const etherscanUrl = tx ? `https://sepolia.etherscan.io/tx/${tx}` : '#'
+
+  // Tamper simulation: show a fake mismatched fingerprint
+  const tamperedFp = mismatch ? `4c21d9${fp.slice(6, 12)}...a194` : null
+
   return (
     <section
       className={`workspace verification-workspace ${mismatch ? 'failed' : ''}`}
@@ -450,55 +489,54 @@ function VerificationState({
       <h2>{mismatch ? 'Integrity mismatch' : 'Content integrity verified'}</h2>
       <p className="intro">
         {mismatch
-          ? 'The current content fingerprint does not match the fingerprint stored on-chain.'
-          : 'The fingerprint of the discovered content matches the fingerprint recorded on-chain.'}
+          ? 'The current content fingerprint does not match the fingerprint stored on-chain. Content may have been tampered with.'
+          : 'The fingerprint of the discovered content matches the fingerprint recorded on Ethereum Sepolia.'}
       </p>
       <div className="comparison" aria-label="Fingerprint comparison">
         <div>
           <span>LOCAL CONTENT</span>
-          <code>{mismatch ? '4c21d9...a194' : '9f8a7c2e4d8b...c81d'}</code>
+          <code>{mismatch ? tamperedFp : `${fp.slice(0, 14)}...${fp.slice(-4)}`}</code>
         </div>
         <b aria-label={mismatch ? 'does not equal' : 'equals'}>{mismatch ? '≠' : '='}</b>
         <div>
           <span>ON-CHAIN RECORD</span>
-          <code>9f8a7c2e4d8b...c81d</code>
+          <code>{`${fp.slice(0, 14)}...${fp.slice(-4)}`}</code>
         </div>
       </div>
       <strong className="verification-status">{mismatch ? 'CONTENT CHANGED' : 'MATCH — VERIFIED'}</strong>
       {!mismatch && (
         <div className="chain-meta" aria-label="On-chain transaction details">
           <span>Ethereum Sepolia Testnet</span>
-          <span>TX 0x82ab...7f21</span>
-          <span>BLOCK #8,421,907</span>
-          <span>06 Sep 2026, 19:42</span>
+          <span>TX {shortTx}</span>
+          {block && <span>BLOCK #{block.toLocaleString()}</span>}
+          <span>{ts}</span>
         </div>
       )}
       <div className="verification-actions">
         <Button onClick={onAgain}>{mismatch ? 'Run Verification Again' : 'Verify Again'}</Button>
-        {/* FIX: "View Transaction" shown for both verified and mismatch; disabled for mismatch */}
         <Button
           secondary
-          onClick={() => window.open('https://sepolia.etherscan.io/tx/0x82ab', '_blank')}
-          disabled={mismatch}
+          onClick={() => window.open(etherscanUrl, '_blank')}
+          disabled={mismatch || !tx}
         >
-          View Transaction <ExternalLink size={14} />
+          View on Etherscan <ExternalLink size={14} />
         </Button>
       </div>
-      {!mismatch && <Timeline />}
+      {!mismatch && <Timeline result={result} />}
     </section>
   )
 }
 
-/* ─── Timeline ─── */
-function Timeline() {
+/* ─── Timeline — real steps ─── */
+function Timeline({ result }: { result: PipelineResult }) {
   return (
     <div className="timeline" aria-label="Investigation timeline">
-      <div><b>01</b><span>Face detected</span></div>
-      <div><b>02</b><span>Web search completed</span></div>
-      <div><b>03</b><span>Matching content discovered</span></div>
-      <div><b>04</b><span>SHA-256 fingerprint generated</span></div>
-      <div><b>05</b><span>Blockchain record confirmed</span></div>
-      <div><b>06</b><span>Integrity verified</span></div>
+      <div><b>01</b><span>Face detected ({result.face.confidence}% confidence)</span></div>
+      <div><b>02</b><span>Web search via Google Lens</span></div>
+      <div><b>03</b><span>Match: {result.match.platform} ({result.match.score}% similarity)</span></div>
+      <div><b>04</b><span>SHA-256 fingerprint: {result.fingerprint.slice(0, 12)}…</span></div>
+      <div><b>05</b><span>Block #{result.upload.block_number?.toLocaleString()} confirmed</span></div>
+      <div><b>06</b><span>Integrity verified on-chain since {result.verification.human_timestamp}</span></div>
     </div>
   )
 }
@@ -507,60 +545,111 @@ function Timeline() {
 export default function Page() {
   const [stage, setStage] = useState<Stage>('upload')
   const [image, setImage] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [pipelineResult, setPipelineResult] = useState<PipelineResult | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   const upload = (file: File) => {
+    setImageFile(file)
     setImage(URL.createObjectURL(file))
     setStage('analysis')
+    setApiError(null)
   }
 
   const reset = () => {
     setStage('upload')
     setImage(null)
+    setImageFile(null)
+    setPipelineResult(null)
+    setApiError(null)
+    setIsLoading(false)
   }
 
-  // Automatically advance searching → results after 2.2s
-  const advanceSearch = () => {
+  // Call real backend API
+  const runPipeline = async () => {
+    if (!imageFile) return
+    setIsLoading(true)
+    setApiError(null)
     setStage('searching')
-    window.setTimeout(() => setStage('results'), 2200)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', imageFile)
+
+      const response = await fetch(`${API_BASE}/api/run`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Pipeline failed')
+      }
+
+      setPipelineResult(data as PipelineResult)
+      setStage('results')
+    } catch (err: any) {
+      setApiError(err.message || 'Pipeline error. Is the Flask server running?')
+      setStage('analysis')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Automatically advance recording → verified after 2.3s
-  const advanceRecord = () => {
-    setStage('recording')
-    window.setTimeout(() => setStage('verified'), 2300)
-  }
-
-  // Simulate tampered content → mismatch state (was previously unreachable)
+  // Simulate tampered content (still fake — just flips to mismatch state)
   const simulateTamper = () => {
     setStage('recording')
-    window.setTimeout(() => setStage('mismatch'), 2300)
+    window.setTimeout(() => setStage('mismatch'), 1500)
   }
 
   return (
     <main className="app-shell">
       <Header stage={stage} onReset={reset} />
-      {/* FIX: aria-live so screen readers announce stage changes */}
       <div className="main-content" aria-live="polite" aria-atomic="true">
         {stage === 'upload' && <UploadState onUpload={upload} />}
         {stage === 'analysis' && image && (
-          <AnalysisState image={image} onSearch={advanceSearch} />
+          <AnalysisState
+            image={image}
+            onSearch={runPipeline}
+            isLoading={isLoading}
+            error={apiError}
+          />
         )}
         {stage === 'searching' && <SearchState />}
-        {stage === 'results' && (
-          <ResultsState onSelect={() => setStage('fingerprint')} />
+        {stage === 'results' && pipelineResult && (
+          <ResultsState result={pipelineResult} onSelect={() => setStage('fingerprint')} />
         )}
-        {stage === 'fingerprint' && (
-          <FingerprintState onRecord={advanceRecord} onSimulateTamper={simulateTamper} />
+        {stage === 'fingerprint' && pipelineResult && (
+          <FingerprintState
+            result={pipelineResult}
+            onRecord={() => setStage('recording')}
+            onSimulateTamper={simulateTamper}
+          />
         )}
-        {stage === 'recording' && <RecordingState />}
-        {(stage === 'verified' || stage === 'mismatch') && (
-          <VerificationState mismatch={stage === 'mismatch'} onAgain={reset} />
+        {stage === 'recording' && pipelineResult && (
+          <>
+            <RecordingState />
+            {/* Auto-advance to verified after brief delay */}
+            {(() => {
+              window.setTimeout(() => setStage('verified'), 1500)
+              return null
+            })()}
+          </>
+        )}
+        {(stage === 'verified' || stage === 'mismatch') && pipelineResult && (
+          <VerificationState
+            mismatch={stage === 'mismatch'}
+            result={pipelineResult}
+            onAgain={reset}
+          />
         )}
       </div>
       <footer>
         <span>FACECHAIN VERIFY</span>
         <span>DISCOVER. FINGERPRINT. VERIFY.</span>
-        <span>v1.0 / DEMO MODE</span>
+        <span>v1.0 / LIVE</span>
       </footer>
     </main>
   )
