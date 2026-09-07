@@ -398,3 +398,47 @@ footer {
     transition-duration: .01ms !important;
   }
 }
+
+/* ─── Live API additions ─── */
+.result-platform-badge {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  background: var(--cyan);
+  color: #090b0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.2rem;
+  text-transform: uppercase;
+}
+
+.evidence-platform-icon {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  color: #090b0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 2.5rem;
+  text-transform: uppercase;
+  margin: 0 auto 0.75rem;
+}
+
+.api-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(240,126,133,0.12);
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+}
