@@ -8,6 +8,8 @@ build/
 .venv/
 venv/
 env/
+backend/candidates/
+backend/compressed_input.jpg
 
 # ── Environment variables (NEVER commit secrets) ────────────────────
 .env
