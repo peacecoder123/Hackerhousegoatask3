@@ -31,26 +31,18 @@ See pipeline.py — the pipeline is updated to handle the dict return.
 
 Member 3 owns this file.
 """
-
 from __future__ import annotations
 
 import os
 import logging
-from pathlib import Path
 from typing import Any
-
 from dotenv import load_dotenv
+
 from web3 import Web3
 from web3.exceptions import ContractLogicError, Web3Exception
 
 from .abi import FACECHAIN_VERIFY_ABI
 from .fingerprint import validate_fingerprint, fingerprint_to_bytes32
-
-# Load backend/.env so _load_env() can read credentials when uploader is
-# imported directly (e.g. in tests or one-off scripts).  load_dotenv() is
-# a no-op if the file does not exist or vars are already set.
-BACKEND_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BACKEND_DIR / ".env")
 
 log = logging.getLogger(__name__)
 
@@ -58,9 +50,8 @@ log = logging.getLogger(__name__)
 EXPECTED_CHAIN_ID = 11155111
 EXPECTED_NETWORK = "Ethereum Sepolia"
 
-# Gas limit for the store() call.  The function is simple (one SSTORE + event),
-# so 100 000 is a generous ceiling.  Estimation is used first; this is the cap.
-GAS_LIMIT_CEILING = 120_000
+# Gas limit for the store() call. Generous ceiling allowing network headroom.
+GAS_LIMIT_CEILING = 300_000
 
 # How long to wait for transaction confirmation (seconds).
 TX_TIMEOUT_SECONDS = 300
